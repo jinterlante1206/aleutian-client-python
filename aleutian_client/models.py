@@ -45,7 +45,7 @@ class RAGResponse(BaseModel):
 class SessionInfo(BaseModel):
     session_id: str
     summary: str
-    timestamp: int
+    timestamp: Optional[int] = None
 
 # --- Models for POST /v1/documents ---
 class DocumentRequest(BaseModel):

@@ -16,7 +16,8 @@ import httpx
 from .models import (
     RAGRequest, RAGResponse,
     DirectChatRequest, DirectChatResponse, Message,
-    DocumentRequest, DocumentResponse, SessionListResponse, SessionInfo, DeleteSessionResponse,
+    DocumentRequest, DocumentResponse,
+    SessionListResponse, SessionInfo, DeleteSessionResponse, WeaviateGraphQLResponse,
     TimeseriesForecastRequest, TimeseriesForecastResponse, DataFetchResponse, DataFetchRequest
 )
 from .exceptions import AleutianConnectionError, AleutianApiError
@@ -75,7 +76,6 @@ class AleutianClient:
         """
         request_data = RAGRequest(query=query, pipeline=pipeline, no_rag=no_rag,
                                   session_id=session_id)
-
         try:
             endpoint = "/v1/rag"
             response = self._client.post(endpoint, json=request_data.model_dump())
@@ -161,13 +161,10 @@ class AleutianClient:
             endpoint = "/v1/sessions"
             response = self._client.get(endpoint)
             self._handle_error(response, endpoint)
-
-            # Parse the nested GraphQL-like response
-            parsed_response = SessionListResponse(**response.json())
-            if parsed_response.data and "Session" in parsed_response.data.Get:
-                return parsed_response.data.Get["Session"]
-            return []  # Return empty list if no data or "Session" key
-
+            parsed_response = WeaviateGraphQLResponse(**response.json())
+            if parsed_response.Get and "Session" in parsed_response.Get:
+                return parsed_response.Get["Session"]
+            return []
         except httpx.RequestError as e:
             raise AleutianConnectionError(f"Connection to /sessions failed: {e}") from e
 
