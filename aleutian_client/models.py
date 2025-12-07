@@ -11,7 +11,7 @@
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 
 # --- Models for /v1/chat/direct ---
 class Message(BaseModel):
@@ -20,9 +20,24 @@ class Message(BaseModel):
 
 class DirectChatRequest(BaseModel):
     messages: List[Message]
+    enable_thinking: Optional[bool] = False
+    budget_tokens: Optional[int] = 2048
+    tools: Optional[List[Any]] = None
 
 class DirectChatResponse(BaseModel):
     answer: str
+
+class AgentTraceRequest(BaseModel):
+    query: str
+
+class AgentStep(BaseModel):
+    tool: str
+    args: Optional[Union[str, Dict[str, Any]]] = None
+    output: Optional[str] = None
+
+class AgentTraceResponse(BaseModel):
+    answer: str
+    steps: Optional[List[AgentStep]] = []
 
 # --- Models for /v1/rag ---
 class RAGRequest(BaseModel):

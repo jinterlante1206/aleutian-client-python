@@ -18,7 +18,8 @@ from .models import (
     DirectChatRequest, DirectChatResponse, Message,
     DocumentRequest, DocumentResponse,
     SessionListResponse, SessionInfo, DeleteSessionResponse, WeaviateGraphQLResponse,
-    TimeseriesForecastRequest, TimeseriesForecastResponse, DataFetchResponse, DataFetchRequest
+    TimeseriesForecastRequest, TimeseriesForecastResponse, DataFetchResponse, DataFetchRequest,
+    AgentTraceResponse, AgentTraceRequest
 )
 from .exceptions import AleutianConnectionError, AleutianApiError
 from typing import List, Optional
@@ -94,32 +95,53 @@ class AleutianClient:
         except httpx.RequestError as e:
             raise AleutianConnectionError(f"Connection to /rag failed: {e}") from e
 
-    def chat(self, messages: list[Message]) -> DirectChatResponse:
+    def chat(self, messages: list[Message],
+             enable_thinking: bool = False,
+             budget_tokens: int = 2048) -> DirectChatResponse:
         """
         Sends a list of messages to the direct chat endpoint (maps to /chat/direct).
 
         Args:
-            messages: A list of Message objects (e.g., [Message(role="user", content="Hi")])
+            messages: A list of Message objects.
+            enable_thinking: Enable extended thinking (requires Claude 3.7+ backend).
+            budget_tokens: Token budget for the thinking process.
 
         Returns:
             A DirectChatResponse object with the assistant's answer.
         """
-        request_data = DirectChatRequest(messages=messages)
+        request_data = DirectChatRequest(
+            messages=messages,
+            enable_thinking=enable_thinking,
+            budget_tokens=budget_tokens
+        )
         try:
             endpoint = "/v1/chat/direct"
             response = self._client.post(endpoint, json=request_data.model_dump())
-            if response.status_code != 200:
-                try:
-                    error_detail = response.json().get('error', response.text)
-                except Exception:
-                    error_detail = response.text
-                raise AleutianApiError(
-                    f"API returned status {response.status_code}: {error_detail}")
-
+            self._handle_error(response, endpoint)
             return DirectChatResponse(**response.json())
 
         except httpx.RequestError as e:
             raise AleutianConnectionError(f"Connection to /chat/direct failed: {e}") from e
+
+    def trace(self, query: str) -> AgentTraceResponse:
+        """
+        Deploys the Autonomous Agent to analyze the codebase (maps to /v1/agent/trace).
+
+        Args:
+            query: The request for the agent (e.g., "Analyze the auth logic").
+
+        Returns:
+            An AgentTraceResponse containing the answer and steps taken.
+        """
+        request_data = AgentTraceRequest(query=query)
+        try:
+            endpoint = "/v1/agent/trace"
+            # Agents can take a while, consider a custom timeout here if needed
+            response = self._client.post(endpoint, json=request_data.model_dump(), timeout=600.0)
+            self._handle_error(response, endpoint)
+            return AgentTraceResponse(**response.json())
+        except httpx.RequestError as e:
+            raise AleutianConnectionError(f"Connection to /agent/trace failed: {e}") from e
 
     def populate_document(self, content: str, source: str,
                           version: Optional[str] = None) -> DocumentResponse:
