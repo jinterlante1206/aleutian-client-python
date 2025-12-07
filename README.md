@@ -3,14 +3,13 @@
 [![PyPI version](https://badge.fury.io/py/aleutian-client.svg)](https://badge.fury.io/py/aleutian-client)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-The official Python client SDK for the **[AleutianLocal MLOps platform](https://github.com/jinterlante1206/AleutianLocal)**.
+The official Python client SDK for the **[AleutianLocal Secure Enterprise Intelligence Platform](https://github.com/jinterlante1206/AleutianLocal)**.
 
 This package allows developers, data scientists, and applications to programmatically interact with a running AleutianLocal stack to perform:
-* Retrieval-Augmented Generation (RAG) queries
-* Direct-to-LLM chat sessions
-* Timeseries forecasting
-* Session management
-* And more, all through a simple Python API.
+* **Autonomous Agent Tasks:** Deploy the local agent to trace code and answer architectural questions.
+* **RAG Queries:** Ask questions against your private data with full citations.
+* **Direct Chat:** Interact with the configured LLM (Claude, OpenAI, or Local) with support for "Thinking Mode".
+* **Timeseries Forecasting:** Run forecasts on financial or custom data.
 
 ---
 
@@ -23,7 +22,6 @@ Before using this package, please ensure you have:
 2.  Started the Aleutian stack:
 
     ```bash
-    # Make sure your Podman machine and Ollama are running
     aleutian stack start
     ```
 
@@ -35,15 +33,12 @@ You can install the client using `pip`:
 
 ```bash
 pip install aleutian-client
-````
+```
 
 ## Quickstart & Usage
+The client is designed to be used with a context manager (the with statement), which automatically handles opening and closing the connection.
 
-The client is designed to be used with a context manager (the `with` statement), which automatically handles opening and closing the connection.
-
-Here is a complete example showing the most common operations.
-
-```python
+```Python
 import sys
 from aleutian_client import AleutianClient, Message
 from aleutian_client import AleutianConnectionError, AleutianApiError
@@ -56,32 +51,31 @@ def main():
 
             # 2. Run a health check to verify connection
             health = client.health_check()
-            print(f"Successfully connected to Aleutian: {health.get('status')}")
+            print(f"✅ Successfully connected: {health.get('status')}")
 
             # -------------------------------------------------
-            # Example 1: Direct Ask (No RAG)
-            # This sends the query directly to the configured LLM.
+            # Example 1: Autonomous Agent (New in v0.3.0)
+            # Deploy the agent to analyze code or answer complex questions
             # -------------------------------------------------
-            print("\n--- 1. Direct LLM Ask (no RAG) ---")
+            print("\n--- 1. Agent Trace ---")
             try:
-                # Use no_rag=True to bypass RAG
-                response_ask = client.ask(
-                    query="What is the capital of France?", 
-                    no_rag=True
-                )
-                print(f"LLM Answer: {response_ask.answer}")
+                # The agent will explore the codebase available to the stack
+                trace_resp = client.trace(query="Analyze the auth logic in cmd_stack.go")
+                print(f"Agent Answer: {trace_resp.answer}")
+                
+                if trace_resp.steps:
+                    print("Steps Taken:")
+                    for step in trace_resp.steps:
+                        # step is an AgentStep object
+                        print(f" - {step.tool}({step.args})")
             except AleutianApiError as e:
-                print(f"API Error: {e}")
-
+                print(f"Agent Error: {e}")
 
             # -------------------------------------------------
             # Example 2: RAG-Powered Ask
-            # Assumes you have already populated data, e.g.:
-            # aleutian populate vectordb ./my_documents
             # -------------------------------------------------
             print("\n--- 2. RAG-Powered Query ---")
             try:
-                # no_rag=False (default) uses the 'reranking' pipeline
                 response_rag = client.ask(
                     query="What is AleutianLocal?",
                     pipeline="reranking" # or "standard"
@@ -89,31 +83,45 @@ def main():
                 print(f"RAG Answer: {response_rag.answer}")
                 
                 if response_rag.sources:
-                    sources = [s.source for s in response_rag.sources]
-                    print(f"Sources: {sources}")
-                else:
-                    print("No sources found. (Is data populated?)")
+                    print(f"Sources: {[s.source for s in response_rag.sources]}")
             
             except AleutianApiError as e:
                 print(f"API Error: {e}")
 
-
             # -------------------------------------------------
-            # Example 3: Direct Chat Session
-            # This uses the /v1/chat/direct endpoint.
+            # Example 3: Direct Chat with Thinking (Claude 3.7+)
             # -------------------------------------------------
-            print("\n--- 3. Direct Chat Session ---")
+            print("\n--- 3. Direct Chat (Thinking Mode) ---")
             try:
-                # The chat method takes a list of Message objects
                 messages = [
-                    Message(role="user", content="Hello! Please introduce yourself briefly.")
+                    Message(role="user", content="Explain the implications of P=NP.")
                 ]
-                response_chat = client.chat(messages=messages)
+                # Enable extended thinking for complex tasks
+                # Note: Requires a backend that supports thinking (e.g., Claude 3.7)
+                response_chat = client.chat(
+                    messages=messages,
+                    enable_thinking=True,
+                    budget_tokens=4000
+                )
                 print(f"Chat Answer: {response_chat.answer}")
             
             except AleutianApiError as e:
                 print(f"API Error: {e}")
-
+            
+            # -------------------------------------------------
+            # Example 4: Timeseries Forecasting (Experimental)
+            # -------------------------------------------------
+            print("\n--- 4. Forecasting ---")
+            try:
+                # Requires 'timeseries' feature enabled in Aleutian config
+                forecast = client.forecast(
+                    name="SPY",
+                    context_period_size=300,
+                    forecast_period_size=20
+                )
+                print(f"Forecast generated: {len(forecast.forecast)} points")
+            except AleutianApiError as e:
+                print(f"Forecast Error: {e}")
 
     except AleutianConnectionError:
         print("\nError: Could not connect to AleutianLocal stack.", file=sys.stderr)
@@ -123,10 +131,8 @@ def main():
         print(f"An unexpected error occurred: {e}", file=sys.stderr)
         sys.exit(1)
 
-
 if __name__ == "__main__":
     main()
-
 ```
 
 ## License
